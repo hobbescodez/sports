@@ -650,6 +650,33 @@ No scored games yet - this fills in once results_log.csv has at least one Final 
 <div class="card boxed">No forward-tracked games yet - this fills in as new days are logged on/after {{ r.totals_threshold_start_date }}.</div>
 {% endif %}
 
+<div class="eyebrow" id="dd-market-lean-totals"><span class="label">Market-Lean Adjusted Totals</span><span class="sub">a second, separate forward-only paper rule — not the same rule as Totals Threshold Tracking above, not merged with it</span><span class="rule"></span></div>
+<div class="disclaimer-strip">Distinct rule: for every game where Kalshi's real-money market has a determined over/under lean, this bets OVER against an adjusted line — market total − 2 runs if Kalshi leans over, market total − 4 runs if Kalshi leans under — never under. The −2/−4 adjustment is a fixed number chosen by hand, not fit to any backtest. Only counts games logged on/after {{ r.market_lean_start_date }}, forward-only, same discipline as every other tracked rule here. Paper/analysis only, never connected to real order placement.</div>
+<div class="also-note">Because this rule's line is deliberately easier to clear than the market's real total, the row below it always bets OVER at the market's actual, unadjusted total instead — over the exact same qualifying games. That's the only way to tell whether the −2/−4 adjustment is adding real value, or just picking an easier line that would hit regardless.</div>
+{% if r.market_lean_forward %}
+<div class="table-wrap" style="margin-top:10px"><table>
+<thead><tr><th></th><th class="num">Qualifying games</th><th class="num">Pushes</th><th class="num">Hits</th><th class="num">Hit rate</th></tr></thead>
+<tbody>
+<tr>
+  <td style="font-weight:600">Adjusted line (market − 2/−4, over-only)</td>
+  <td class="num">{{ r.market_lean_forward.qualifying }}</td>
+  <td class="num">{{ r.market_lean_forward.pushes }}</td>
+  <td class="num">{{ r.market_lean_forward.hits }}</td>
+  <td class="num">{{ ("%.1f"|format(r.market_lean_forward.hit_rate)) ~ "%" if r.market_lean_forward.hit_rate is not none else "—" }}</td>
+</tr>
+<tr>
+  <td>Baseline: unadjusted market total, over-only</td>
+  <td class="num">{{ r.market_lean_baseline.qualifying if r.market_lean_baseline else "—" }}</td>
+  <td class="num">{{ r.market_lean_baseline.pushes if r.market_lean_baseline else "—" }}</td>
+  <td class="num">{{ r.market_lean_baseline.hits if r.market_lean_baseline else "—" }}</td>
+  <td class="num">{{ ("%.1f"|format(r.market_lean_baseline.hit_rate)) ~ "%" if r.market_lean_baseline and r.market_lean_baseline.hit_rate is not none else "—" }}</td>
+</tr>
+</tbody>
+</table></div>
+{% else %}
+<div class="card boxed">No forward-tracked games yet - this fills in as new days are logged on/after {{ r.market_lean_start_date }}.</div>
+{% endif %}
+
 <div class="eyebrow" id="dd-sources-summary"><span class="label">Source Summary</span><span class="rule"></span></div>
 <div class="table-wrap"><table>
 <thead><tr><th>Source</th><th>What it contains</th></tr></thead>

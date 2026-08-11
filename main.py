@@ -20,6 +20,11 @@ from sports.mlb.report.render import render_artifact_fragment, render_report
 from sports.mlb.tracker.accuracy_breakdown import build_accuracy_breakdown
 from sports.mlb.tracker.log_predictions import log_todays_predictions
 from sports.mlb.tracker.log_results import PREDICTIONS_LOG_PATH, RESULTS_LOG_PATH, fetch_and_log_results
+from sports.mlb.tracker.market_lean_totals import (
+    MARKET_LEAN_START_DATE,
+    market_lean_baseline,
+    market_lean_forward,
+)
 from sports.mlb.tracker.scoring import score_predictions
 from sports.mlb.tracker.totals_threshold import (
     FORWARD_TRACKING_START_DATE,
@@ -222,6 +227,25 @@ def main():
         traceback.print_exc(file=sys.stderr)
         report_data["totals_threshold_forward"] = []
         report_data["totals_threshold_start_date"] = FORWARD_TRACKING_START_DATE
+
+    # Market-lean adjusted totals rule: a SECOND, distinct forward-only
+    # paper test, not the same rule as totals_threshold_forward above and
+    # deliberately not merged with it - see market_lean_totals.py's
+    # module docstring. Paper/analysis only, no order placement.
+    try:
+        report_data["market_lean_forward"] = market_lean_forward(predictions_rows, results_rows)
+        report_data["market_lean_baseline"] = market_lean_baseline(predictions_rows, results_rows)
+        report_data["market_lean_start_date"] = MARKET_LEAN_START_DATE
+        print(
+            f"Market-lean totals rule: {report_data['market_lean_forward'].qualifying} qualifying "
+            f"game(s) since {MARKET_LEAN_START_DATE}"
+        )
+    except Exception as e:
+        print(f"[warn] Market-lean totals rule failed: {e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        report_data["market_lean_forward"] = None
+        report_data["market_lean_baseline"] = None
+        report_data["market_lean_start_date"] = MARKET_LEAN_START_DATE
 
     inline_font_css = _fetch_safe("Google Fonts (Oswald/Inter)", _inline_font_css, "")
     if inline_font_css:
