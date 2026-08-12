@@ -22,8 +22,13 @@
 
 {# Gold "this is today's highest-conviction pick" badge, shown inline
    next to a matchup name in the Model Predictions table - see base.css's
-   tr.top-pick-row for the matching row highlight. #}
-{% macro top_pick_badge(title, label) %}<span class="top-pick-badge" title="{{ title }}">{{ label }}</span>{% endmacro %}
+   tr.top-pick-row for the matching row highlight. Leading space is a
+   real text character, not just CSS margin - margin-left alone looks
+   fine on screen but produces no whitespace when the cell's text is
+   copied/pasted or read by a screen reader (e.g. "STL" + badge glued
+   together as "STL🏆 ML"), so this covers both cases rather than just
+   the visual one. #}
+{% macro top_pick_badge(title, label) %} <span class="top-pick-badge" title="{{ title }}">{{ label }}</span>{% endmacro %}
 
 {# Cross-sport header nav - same on every real page, only the active-page
    highlight changes. `active` is "home"/"mlb"/"epl"/"nfl". NFL stays a

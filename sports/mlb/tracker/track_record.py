@@ -1,14 +1,25 @@
 """
-Trailing-N-days "highest conviction" accuracy history - a display layer
-over predictions_log.csv + results_log.csv (scoring.py's data), not new
-data infrastructure. For each of the last few days, finds that day's
-single highest-conviction moneyline pick and single highest-conviction
-totals pick - mirroring build.py's Conviction Board vote-counting and
-CONVICTION_MIN_SOURCES/CONVICTION_MAX_DISSENT thresholds exactly, just
-applied to logged historical picks instead of live source objects
-(a past day's Matchup objects no longer exist by the time this runs) -
-then checks each against what actually happened. Scoped to one pick per
-side per day, not all of that day's games, to keep the table readable.
+Trailing-N-days accuracy history - a display layer over
+predictions_log.csv + results_log.csv (scoring.py's data), not new data
+infrastructure.
+
+Moneyline side: for each of the last few days, finds that day's single
+highest-conviction moneyline pick - mirroring build.py's Conviction
+Board vote-counting and CONVICTION_MIN_SOURCES/CONVICTION_MAX_DISSENT
+thresholds exactly, just applied to logged historical picks instead of
+live source objects (a past day's Matchup objects no longer exist by
+the time this runs) - then checks it against what actually happened.
+Scoped to one pick per day, not all of that day's games, to keep the
+table readable.
+
+Totals side: NOT a highest-conviction single pick. Every game that day
+clearing totals_threshold.py's PICK_THRESHOLD rule (over-only: model
+total >= market + PICK_THRESHOLD) counts as a logged pick - could be
+zero games on a quiet day, could be several. This mirrors what's
+actually tracked as a "totals pick" for accuracy purposes now (see
+totals_threshold.py's module docstring for why that threshold and rule),
+not a separate conviction-vote concept - so a day's totals row here is a
+count + hit rate, not a single matchup.
 """
 
 from dataclasses import dataclass
@@ -16,9 +27,9 @@ from dataclasses import dataclass
 from core.conviction import tally_votes
 from sports.mlb.analysis.build import CONVICTION_MAX_DISSENT, CONVICTION_MIN_SOURCES
 from sports.mlb.teams import full_name
+from sports.mlb.tracker.totals_threshold import qualifies, score_row
 
 _MONEYLINE_FIELDS = (("dratings_pick", "DRatings"), ("bpp_pick", "BPP"), ("mymodel_pick", "My model"))
-_TOTALS_PROJ_FIELDS = (("dratings_total_proj", "DRatings"), ("bpp_total_proj", "BPP"), ("mymodel_total_proj", "My model"))
 
 
 @dataclass
@@ -30,21 +41,10 @@ class DayRecord:
     ml_agree: str | None = None
     ml_actual_winner: str | None = None
     ml_correct: bool | None = None
-    totals_matchup: str | None = None
-    totals_pick: str | None = None
-    totals_agree: str | None = None
-    totals_market_line: float | None = None
-    totals_actual_total: float | None = None
-    totals_correct: bool | None = None
-
-
-def _to_float(value):
-    if value in (None, ""):
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
+    totals_qualifying: int = 0   # games that day clearing PICK_THRESHOLD - i.e. picks actually logged
+    totals_pushes: int = 0
+    totals_hits: int = 0
+    totals_hit_rate: float | None = None  # None if no decided (non-push) qualifying picks yet
 
 
 def _moneyline_votes(row):
@@ -53,20 +53,6 @@ def _moneyline_votes(row):
     count here too (see build.py's _moneyline_votes for the live-board
     equivalent)."""
     return [(label, row[field]) for field, label in _MONEYLINE_FIELDS if row.get(field)]
-
-
-def _totals_votes(row):
-    """Counted votes only - DRatings, BPP, My model's projected totals vs.
-    the market line. Kalshi's total-market lean is excluded from the count
-    here too, same reasoning as _moneyline_votes above."""
-    votes = []
-    market_total = _to_float(row.get("market_total"))
-    if market_total is not None:
-        for field, label in _TOTALS_PROJ_FIELDS:
-            proj = _to_float(row.get(field))
-            if proj is not None:
-                votes.append((label, "over" if proj > market_total else "under"))
-    return votes
 
 
 def _highest_conviction(rows, votes_fn):
@@ -121,24 +107,23 @@ def build_track_record(predictions_rows, results_rows, num_days=7, exclude_date=
                 rec.ml_actual_winner = result["winner_abbrev"]
                 rec.ml_correct = pick == result["winner_abbrev"]
 
-        totals_best = _highest_conviction(rows, _totals_votes)
-        if totals_best:
-            row, lean, agree_n, total_n = totals_best
-            rec.totals_matchup = f"{row['away_abbrev']} @ {row['home_abbrev']}"
-            rec.totals_pick = lean
-            rec.totals_agree = f"{agree_n}/{total_n}"
-            rec.totals_market_line = _to_float(row.get("market_total"))
-            result = results_by_id.get(row.get("game_id"))
-            if result and result.get("total_runs") not in (None, ""):
-                actual_total = _to_float(result["total_runs"])
-                rec.totals_actual_total = actual_total
-                if (
-                    actual_total is not None
-                    and rec.totals_market_line is not None
-                    and actual_total != rec.totals_market_line
-                ):
-                    actual_lean = "over" if actual_total > rec.totals_market_line else "under"
-                    rec.totals_correct = lean == actual_lean
+        totals_misses = 0
+        for row in rows:
+            if not qualifies(row):
+                continue
+            rec.totals_qualifying += 1
+            outcome = score_row(row, results_by_id.get(row.get("game_id")))
+            if outcome == "push":
+                rec.totals_pushes += 1
+            elif outcome == "hit":
+                rec.totals_hits += 1
+            elif outcome == "miss":
+                totals_misses += 1
+            # outcome is None when the game isn't final yet - still counts
+            # toward totals_qualifying (a pick was logged) but not yet
+            # toward hits/misses/hit_rate.
+        decided = rec.totals_hits + totals_misses
+        rec.totals_hit_rate = round(100 * rec.totals_hits / decided, 1) if decided else None
 
         records.append(rec)
 
