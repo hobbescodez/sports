@@ -6,13 +6,34 @@ predictions the way DRatings/MoundEdge do.
 Formula (transparent, not a black box - see _project_runs):
     expected_runs ~= league_avg_runs_per_team_game
                       * (batting_team_recent_xwoba / league_xwoba)
-                      * (opposing_starter_recent_xwoba_allowed / league_xwoba)
+                      * (opposing_starter_stabilized_xwoba_allowed / league_xwoba)
                       * park_factor
 
 A pitcher's "average" xwOBA-allowed and the league's average batting
 xwOBA are the same underlying number (one team's batting output is by
 definition the opposing pitcher's allowed output, aggregated league-wide)
 - so both ratios above are legitimately divided by the same league_xwoba.
+
+"opposing_starter_stabilized_xwoba_allowed" (see _stabilized_xwoba_allowed)
+is NOT the raw 30-day rolling xwOBA-allowed number - it's that number
+shrunk toward a more stable baseline (the pitcher's own season
+xwOBA-allowed, falling back to the league average), weighted by how
+many batters that 30-day figure is actually based on. This exists
+because a real diagnosis of this model's live accuracy (227 logged
+picks: 45.4%, below a coin flip, and getting WORSE rather than better
+as the model's own projected run gap grew - see PR discussion) pointed
+squarely at this term: a starter with only a handful of batters faced
+in the last 30 days produces a wildly noisy xwOBA-allowed number that
+the old formula weighted identically to a starter with a full workload,
+and that noise was driving large, confident-looking projections that
+were actually anti-predictive. This is a single, isolated fix (pitcher
+shrinkage only) - deliberately not combined with other changes (e.g.
+folding in bullpen quality) in the same pass, so any change in the
+model's real forward accuracy can be attributed to this fix specifically
+rather than several changes at once. PITCHER_STABILIZATION_PA below is a
+reasonable round starting constant, not derived from a formal
+stabilization study on this project's own data - it should be revisited
+once enough forward accuracy has accumulated under it to actually check.
 
 Data sources, all verified reachable via scripts/probe_pybaseball.py
 (FanGraphs is deliberately NOT used - confirmed blocked with a 403 from
@@ -81,6 +102,13 @@ class PitcherRollingStats:
     # qualified/listed there yet
     xwoba_allowed_season: float | None = None
     pitches_30d: int = 0
+    # batters faced (PA-ending events) per window - the actual sample
+    # size behind xwoba_allowed_{15,30}d specifically (pitches_30d above
+    # counts every pitch, most of which aren't PA-ending), used by
+    # _stabilized_xwoba_allowed to decide how much to shrink the 30-day
+    # number toward a more stable baseline.
+    pa_15d: int = 0
+    pa_30d: int = 0
 
 
 @dataclass
@@ -160,12 +188,15 @@ def _fetch_league_avg_runs_per_team_game(today, window_days=TEAM_XWOBA_WINDOW_DA
 
 
 def _window_stats(df):
-    """(velocity, whiff_pct, xwoba_allowed) over the given pitch-level
-    slice, or (None, None, None) if it's empty."""
+    """(velocity, whiff_pct, xwoba_allowed, pa_count) over the given
+    pitch-level slice, or (None, None, None, 0) if it's empty. pa_count
+    is the number of PA-ending rows the xwoba_allowed figure is actually
+    based on (not the raw pitch count) - the sample size
+    _stabilized_xwoba_allowed shrinks by."""
     import pandas as pd
 
     if len(df) == 0:
-        return None, None, None
+        return None, None, None, 0
 
     velocity = df["release_speed"].mean()
     velocity = round(float(velocity), 1) if pd.notna(velocity) else None
@@ -177,14 +208,15 @@ def _window_stats(df):
     whiff_pct = round(100 * whiffs / swings, 1) if swings else None
 
     pa_ending = df[df["woba_denom"] > 0]
-    if len(pa_ending):
+    pa_count = len(pa_ending)
+    if pa_count:
         component = pa_ending["estimated_woba_using_speedangle"].fillna(pa_ending["woba_value"])
         denom_sum = pa_ending["woba_denom"].sum()
         xwoba_allowed = round(float((component * pa_ending["woba_denom"]).sum() / denom_sum), 3) if denom_sum else None
     else:
         xwoba_allowed = None
 
-    return velocity, whiff_pct, xwoba_allowed
+    return velocity, whiff_pct, xwoba_allowed, pa_count
 
 
 def fetch_pitcher_rolling_stats(pitcher_id, pitcher_name, today=None, timeout=None):
@@ -214,10 +246,11 @@ def fetch_pitcher_rolling_stats(pitcher_id, pitcher_name, today=None, timeout=No
         "30d": df,
     }
     for label, sub in windows.items():
-        velo, whiff, xwoba = _window_stats(sub)
+        velo, whiff, xwoba, pa_count = _window_stats(sub)
         setattr(stats, f"velocity_{label}", velo)
         setattr(stats, f"whiff_pct_{label}", whiff)
         setattr(stats, f"xwoba_allowed_{label}", xwoba)
+        setattr(stats, f"pa_{label}", pa_count)
     stats.pitches_30d = len(windows["30d"])
     return stats
 
@@ -267,13 +300,47 @@ def fetch_team_xwoba(today=None, window_days=TEAM_XWOBA_WINDOW_DAYS):
     return team_xwoba, league_xwoba
 
 
+PITCHER_STABILIZATION_PA = 60  # see module docstring - a round starting constant, not a derived/studied number
+
+
+def _stabilized_xwoba_allowed(pitcher_stats, league_xwoba):
+    """Shrinks the pitcher's 30-day rolling xwOBA-allowed toward a more
+    stable baseline, weighted by pa_30d (batters faced in that window -
+    the real sample size behind the number, not raw pitch count). A
+    pitcher with only a handful of batters faced gets pulled hard toward
+    the baseline; one with a full workload stays close to their own
+    recent number. weight = pa_30d / (pa_30d + PITCHER_STABILIZATION_PA),
+    so weight=0.5 right at the stabilization point and approaches 1 as
+    pa_30d grows well beyond it.
+
+    Baseline is the pitcher's own SEASON xwOBA-allowed when available (a
+    much bigger, more stable sample than 30 days), falling back to the
+    league average when it isn't (e.g. a rookie call-up not yet listed
+    in Statcast's season expected-stats endpoint). Returns None if
+    there's no 30-day number to shrink in the first place."""
+    if pitcher_stats is None or pitcher_stats.xwoba_allowed_30d is None:
+        return None
+    baseline = pitcher_stats.xwoba_allowed_season
+    if baseline is None:
+        baseline = league_xwoba
+    if baseline is None:
+        # defensive fallback only - _project_runs' caller already
+        # guarantees league_xwoba is not None before this is reached,
+        # so this branch is for any other direct caller of this function.
+        return pitcher_stats.xwoba_allowed_30d
+    pa = pitcher_stats.pa_30d or 0
+    weight = pa / (pa + PITCHER_STABILIZATION_PA)
+    return weight * pitcher_stats.xwoba_allowed_30d + (1 - weight) * baseline
+
+
 def _project_runs(batting_team_xwoba, opposing_pitcher_stats, league_xwoba, league_avg_runs, pk_factor):
     if batting_team_xwoba is None or league_xwoba is None or league_avg_runs is None:
         return None
-    if opposing_pitcher_stats is None or opposing_pitcher_stats.xwoba_allowed_30d is None:
+    stabilized_pitcher_xwoba = _stabilized_xwoba_allowed(opposing_pitcher_stats, league_xwoba)
+    if stabilized_pitcher_xwoba is None:
         return None
     team_factor = batting_team_xwoba / league_xwoba
-    pitcher_factor = opposing_pitcher_stats.xwoba_allowed_30d / league_xwoba
+    pitcher_factor = stabilized_pitcher_xwoba / league_xwoba
     return round(league_avg_runs * team_factor * pitcher_factor * pk_factor, 2)
 
 
