@@ -977,3 +977,4 @@ game_id,date,game_number,logged_at,away_abbrev,home_abbrev,game_time,dratings_pi
 2026-10-09_MIN_LAA_G1,2026-10-09,1,2026-10-09T15:20:24.527125-04:00,MIN,LAA,9:38 pm,,,,,MIN,4.5,3.8,8.3,,,,,,,,,,,7.5,not much consensus,0.0,MIN,MIN,1,1,1,-4.0
 2026-10-09_PHI_NYM_G1,2026-10-09,1,2026-10-09T15:20:24.527125-04:00,PHI,NYM,7:15 pm,,,,,NYM,4.2,4.5,8.8,,,,,,,,,,,8.0,not much consensus,9.0,NYM,NYM,1,1,0,-5.0
 2026-10-09_SDP_COL_G1,2026-10-09,1,2026-10-09T15:20:24.527125-04:00,SDP,COL,3:10 pm,,,,,SDP,6.1,5.0,11.2,,,,,,,,,,,11.0,fairly confident pick,19.80000000000001,SDP,SDP,1,1,1,36.0
+2026-10-10_CHW_CLE_G1,2026-10-10,1,2026-10-10T14:18:33.924745-04:00,CHW,CLE,,CLE,3.32,3.96,7.28,,,,,CLE,4.4,4.45,8.85,CLE,43.5,56.5,9.5,28.0,under,7.0,not much consensus,12.400000000000006,CLE,CLE,2,2,0,
