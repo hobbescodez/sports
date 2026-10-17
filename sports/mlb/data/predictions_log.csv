@@ -986,3 +986,4 @@ game_id,date,game_number,logged_at,away_abbrev,home_abbrev,game_time,dratings_pi
 2026-10-15_MIL_LAD_G1,2026-10-15,1,2026-10-15T14:06:14.433391-04:00,MIL,LAD,,LAD,3.68,4.8,8.48,,,,,,,,,LAD,42.5,58.5,9.5,32.5,under,7.0,fairly confident pick,21.200000000000003,LAD,LAD,1,1,1,
 2026-10-15_TBR_CLE_G1,2026-10-15,1,2026-10-15T14:06:14.433391-04:00,TBR,CLE,,,,,,,,,,,,,,CLE,33.5,66.5,9.5,13.0,under,,not much consensus,0.0,,,,,0,
 2026-10-16_TBR_CLE_G1,2026-10-16,1,2026-10-16T13:52:03.702368-04:00,TBR,CLE,,TBR,3.6,3.29,6.89,,,,,,,,,TBR,50.5,49.5,9.5,22.0,under,6.0,not much consensus,5.799999999999997,TBR,TBR,1,1,0,
+2026-10-17_TBR_CLE_G1,2026-10-17,1,2026-10-17T12:54:39.527108-04:00,TBR,CLE,,CLE,3.8,3.82,7.62,,,,,,,,,TBR,52.5,47.5,9.5,21.0,under,6.0,not much consensus,0.20000000000000284,CLE,CLE,1,1,1,
