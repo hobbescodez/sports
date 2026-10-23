@@ -1019,3 +1019,4 @@ game_id,date,game_number,logged_at,away_abbrev,home_abbrev,game_time,dratings_pi
 2026-10-22_PHI_NYM_G1,2026-10-22,1,2026-10-22T14:24:27.794943-04:00,PHI,NYM,7:15 pm,,,,,NYM,4.2,4.5,8.8,,,,,,,,,,,8.0,not much consensus,9.0,NYM,NYM,1,1,0,-5.0
 2026-10-22_SDP_COL_G1,2026-10-22,1,2026-10-22T14:24:27.794943-04:00,SDP,COL,3:10 pm,,,,,SDP,6.1,5.0,11.2,,,,,,,,,,,11.0,fairly confident pick,19.80000000000001,SDP,SDP,1,1,1,36.0
 2026-10-22_TBR_MIL_G1,2026-10-22,1,2026-10-22T14:24:27.794943-04:00,TBR,MIL,,MIL,2.68,4.19,6.87,,,,,,,,,,,,,,,6.0,fairly confident pick,29.0,MIL,MIL,1,1,0,
+2026-10-23_TBR_MIL_G1,2026-10-23,1,2026-10-23T14:11:09.392285-04:00,TBR,MIL,,MIL,2.65,3.87,6.52,,,,,,,,,MIL,36.5,62.5,9.5,21.5,under,6.0,fairly confident pick,23.400000000000006,MIL,MIL,1,1,0,
